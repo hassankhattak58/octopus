@@ -30,6 +30,18 @@ An ESP32-S3 development board with a native USB socket, USB data cable, and a mo
 
 If ESP-IDF is not installed locally, the [Firmware workflow](.github/workflows/firmware.yml) builds the project and publishes an `octopus-esp32s3-firmware` artifact containing `octopus-merged.bin`. Download it from a successful workflow run, then flash it at offset zero with `python -m esptool --chip esp32s3 --port COMx write-flash 0x0 octopus-merged.bin`.
 
+### One-command Notepad demo update (Windows)
+
+Edit [payload.txt](payload.txt) to the text you want the USB button to type into Notepad. It accepts one line, up to 80 characters, using letters, spaces, commas, and exclamation marks. This is a text demo file; it does not execute commands. Its contents are committed to this **public** repository, so do not put secrets in it.
+
+With the **COM** socket connected and `git`, `gh`, Python, and `esptool` installed, run from the repository root:
+
+```powershell
+.\deploy-demo.ps1 -Port COM3
+```
+
+The script validates the text, generates the firmware header, commits and pushes the two demo files if they changed, waits for a successful GitHub Actions build, downloads the merged image, checks the chip on the selected port, and flashes it. It stops on any failure and refuses unrelated worktree changes. Connect the board's **USB** socket afterward and press the button to test. Use a different `-Port` value if Windows assigned another COM number.
+
 The keyboard mapping currently assumes a US English host layout. The Notepad sequence uses the Windows `Win+R` shortcut and is Windows-specific. If you change the HID report map or device name, remove the old Bluetooth pairing and pair again so the host refreshes its cached descriptor. This board has no display or keypad, so this prototype uses BLE Just Works bonding; it does not provide MITM protection. A phone control service will need a stronger authorization design before it can trigger actions.
 
 ## Plan

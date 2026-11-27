@@ -15,6 +15,7 @@
 #include "class/hid/hid_device.h"
 
 #include "usb_hid.h"
+#include "demo_message.h"
 
 static const char *TAG = "OCTOPUS_USB";
 static const uint8_t report_descriptor[] = {
@@ -127,7 +128,7 @@ static void open_notepad_and_type(void)
         return;
     }
     vTaskDelay(pdMS_TO_TICKS(1500));
-    const char *message = "Welcome, Octupus Here!";
+    const char *message = OCTOPUS_DEMO_MESSAGE;
     for (const char *ch = message; *ch; ++ch) {
         if (!send_char(*ch)) {
             return;
