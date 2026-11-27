@@ -18,6 +18,7 @@
 #include "esp_log.h"
 #include "nvs_flash.h"
 #include "driver/gpio.h"
+#include "usb_hid.h"
 #include "esp_bt.h"
 
 #if CONFIG_BT_NIMBLE_ENABLED
@@ -359,7 +360,7 @@ void ble_hid_demo_task_kbd(void *pvParameters)
     bool was_pressed = false;
     while (1) {
         const bool pressed = gpio_get_level(trigger) == 0;
-        if (pressed && !was_pressed) {
+        if (pressed && !was_pressed && !octopus_usb_hid_ready()) {
             vTaskDelay(pdMS_TO_TICKS(30));
             if (gpio_get_level(trigger) == 0) {
                 const char *message = "Octopus ready\n";
@@ -922,6 +923,7 @@ void ble_store_config_init(void);
 void app_main(void)
 {
     esp_err_t ret;
+    octopus_usb_hid_init();
 #if HID_DEV_MODE == HIDD_IDLE_MODE
     ESP_LOGE(TAG, "Please turn on BT HID device or BLE!");
     return;

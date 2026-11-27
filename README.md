@@ -6,12 +6,12 @@ Open source ESP32-S3 multipurpose device project. The first milestone is a Bluet
 
 - ESP-IDF firmware based on [Espressif's HID device example](https://github.com/espressif/esp-idf/tree/v5.5.3/examples/bluetooth/esp_hid_device), pinned to ESP-IDF **v5.5.3**.
 - BLE keyboard profile using Espressif's `esp_hid` component and NimBLE. ESP32-S3 supports BLE, but not Bluetooth Classic.
-- One press of a button wired between **GPIO 4 and GND** types `Octopus ready` followed by Enter into a paired computer's focused text field. The pin is configurable in `idf.py menuconfig` under **HID Example Configuration**.
-- No mobile control, script interpreter, Wi-Fi capture, or USB HID yet.
+- One press of a button wired between **GPIO 4 and GND** uses the active HID transport. With native USB connected to a Windows PC, it opens an untitled Notepad window and types `Welcome, Octupus Here!`. Without native USB, it types `Octopus ready` and Enter over BLE to the paired computer. The pin is configurable in `idf.py menuconfig` under **HID Example Configuration**.
+- No mobile control, script interpreter, or Wi-Fi capture yet.
 
 ## Hardware
 
-An ESP32-S3 development board, USB data cable, and a momentary push button are enough for the first milestone. Connect one button terminal to GPIO 4 and the other to GND. Check your board's pinout first; if GPIO 4 is unavailable, choose another free input pin in menuconfig. The internal pull-up is enabled. Use a computer you own or have permission to test, and open a text editor before pressing the button.
+An ESP32-S3 development board with a native USB socket, USB data cable, and a momentary push button are enough for both transports. Connect one button terminal to GPIO 4 and the other to GND. Check your board's pinout first; if GPIO 4 is unavailable, choose another free input pin in menuconfig. The internal pull-up is enabled. On boards with two sockets, use **COM** for flashing and serial logs, and **USB** for the native USB keyboard. Use a computer you own or have permission to test.
 
 ## Build and test
 
@@ -26,10 +26,11 @@ An ESP32-S3 development board, USB data cable, and a momentary push button are e
 
    Replace `COMx` with your board's serial port. On Linux or macOS, use the corresponding `/dev/...` port.
 3. Pair **Octopus Kbd** from your test computer's Bluetooth settings. Put the cursor in a text editor. Press and release the wired button once. Expect `Octopus ready` and a newline. The serial monitor also logs the send event.
+4. For the USB test on Windows, also connect the board's socket labeled **USB** to the computer with a data cable. Wait for Windows to recognize **Octopus USB Keyboard**. Press and release the button once. Expect a new untitled Notepad window containing `Welcome, Octupus Here!`. USB takes priority while it is connected; unplug native USB to test BLE again.
 
 If ESP-IDF is not installed locally, the [Firmware workflow](.github/workflows/firmware.yml) builds the project and publishes an `octopus-esp32s3-firmware` artifact containing `octopus-merged.bin`. Download it from a successful workflow run, then flash it at offset zero with `python -m esptool --chip esp32s3 --port COMx write-flash 0x0 octopus-merged.bin`.
 
-The keyboard mapping currently assumes a US English host layout. If you change the HID report map or device name, remove the old Bluetooth pairing and pair again so the host refreshes its cached descriptor. This board has no display or keypad, so this prototype uses BLE Just Works bonding; it does not provide MITM protection. A phone control service will need a stronger authorization design before it can trigger actions.
+The keyboard mapping currently assumes a US English host layout. The Notepad sequence uses the Windows `Win+R` shortcut and is Windows-specific. If you change the HID report map or device name, remove the old Bluetooth pairing and pair again so the host refreshes its cached descriptor. This board has no display or keypad, so this prototype uses BLE Just Works bonding; it does not provide MITM protection. A phone control service will need a stronger authorization design before it can trigger actions.
 
 ## Plan
 
