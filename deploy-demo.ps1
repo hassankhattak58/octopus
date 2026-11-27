@@ -82,7 +82,7 @@ for ($attempt = 0; $attempt -lt 24; $attempt++) {
     if ($LASTEXITCODE -ne 0) {
         throw 'Could not query GitHub Actions runs.'
     }
-    $runs = @($json | ConvertFrom-Json)
+    $runs = ConvertFrom-Json -InputObject $json
     $run = $runs | Where-Object { $_.event -eq $event -and [datetime]$_.createdAt -ge $requestedAt } | Sort-Object createdAt -Descending | Select-Object -First 1
     if ($run) { break }
     Start-Sleep -Seconds 5
