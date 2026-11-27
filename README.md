@@ -27,6 +27,8 @@ An ESP32-S3 development board, USB data cable, and a momentary push button are e
    Replace `COMx` with your board's serial port. On Linux or macOS, use the corresponding `/dev/...` port.
 3. Pair **Octopus Kbd** from your test computer's Bluetooth settings. Put the cursor in a text editor. Press and release the wired button once. Expect `Octopus ready` and a newline. The serial monitor also logs the send event.
 
+If ESP-IDF is not installed locally, the [Firmware workflow](.github/workflows/firmware.yml) builds the project and publishes an `octopus-esp32s3-firmware` artifact containing `octopus-merged.bin`. Download it from a successful workflow run, then flash it at offset zero with `python -m esptool --chip esp32s3 --port COMx write-flash 0x0 octopus-merged.bin`.
+
 The keyboard mapping currently assumes a US English host layout. If you change the HID report map or device name, remove the old Bluetooth pairing and pair again so the host refreshes its cached descriptor. This board has no display or keypad, so this prototype uses BLE Just Works bonding; it does not provide MITM protection. A phone control service will need a stronger authorization design before it can trigger actions.
 
 ## Plan
