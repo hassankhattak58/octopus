@@ -1,6 +1,7 @@
 param(
     [ValidatePattern('^COM[0-9]+$')]
-    [string]$Port = 'COM3'
+    [string]$Port = 'COM3',
+    [switch]$ValidateOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -27,8 +28,6 @@ function Assert-SerialPort {
     }
 }
 
-Assert-SerialPort
-
 $branch = (& git branch --show-current).Trim()
 if ($branch -ne 'main') {
     throw 'Run this script from the main branch.'
@@ -42,11 +41,40 @@ $payloadPath = Join-Path $repoRoot 'payload.txt'
 if (-not (Test-Path -LiteralPath $payloadPath)) {
     throw 'Create payload.txt in the repository root first.'
 }
-$raw = [System.IO.File]::ReadAllText($payloadPath, [System.Text.Encoding]::UTF8)
-$message = $raw -replace '(\r?\n)+$', ''
-if ($message.Length -lt 1 -or $message.Length -gt 80 -or $message -cnotmatch '^[A-Za-z ,!]+$') {
-    throw 'payload.txt must be one line of 1–80 characters: letters, spaces, comma, or exclamation mark.'
+$instructions = @([System.IO.File]::ReadAllLines($payloadPath, [System.Text.Encoding]::UTF8) |
+    Where-Object { $_.Trim() -and $_ -notmatch '^\s*REM(?:\s|$)' })
+if ($instructions.Count -ne 5) {
+    throw 'payload.txt needs GUI r, DELAY, STRING notepad.exe, ENTER, and one final STRING line, in that order. REM comments are allowed.'
 }
+if ($instructions[0] -notmatch '^\s*GUI\s+R\s*$') {
+    throw 'The first action must be GUI r.'
+}
+if ($instructions[1] -notmatch '^\s*DELAY\s+([0-9]{1,4})\s*$') {
+    throw 'The second action must be DELAY followed by milliseconds.'
+}
+$delayMs = [int]$Matches[1]
+if ($delayMs -lt 100 -or $delayMs -gt 2000) {
+    throw 'DELAY must be between 100 and 2000 milliseconds.'
+}
+if ($instructions[2] -notmatch '^\s*STRING\s+notepad\.exe\s*$') {
+    throw 'The third action must be STRING notepad.exe.'
+}
+if ($instructions[3] -notmatch '^\s*ENTER\s*$') {
+    throw 'The fourth action must be ENTER.'
+}
+if ($instructions[4] -notmatch '^\s*STRING\s+(.+)$') {
+    throw 'The final action must be STRING followed by Notepad text.'
+}
+$message = $Matches[1]
+if ($message.Length -lt 1 -or $message.Length -gt 80 -or $message -cnotmatch '^[A-Za-z ,!]+$') {
+    throw 'The final STRING must contain 1-80 characters: letters, spaces, comma, or exclamation mark.'
+}
+Write-Host "Validated Notepad demo: delay ${delayMs}ms, text '$message'"
+if ($ValidateOnly) {
+    return
+}
+
+Assert-SerialPort
 
 $staged = & git diff --cached --name-only
 if ($LASTEXITCODE -ne 0 -or $staged) {
@@ -62,7 +90,7 @@ if ($unrelated.Count -gt 0) {
 }
 
 $headerPath = Join-Path $repoRoot 'main/demo_message.h'
-$header = "#pragma once`n`n#define OCTOPUS_DEMO_MESSAGE `"$message`"`n"
+$header = "#pragma once`n`n#define OCTOPUS_RUN_DIALOG_DELAY_MS $delayMs`n#define OCTOPUS_DEMO_MESSAGE `"$message`"`n"
 [System.IO.File]::WriteAllText($headerPath, $header, (New-Object System.Text.UTF8Encoding($false)))
 
 Invoke-Checked 'git' @('add', '--', 'payload.txt', 'main/demo_message.h')

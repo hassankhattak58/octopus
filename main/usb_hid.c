@@ -105,6 +105,9 @@ static bool send_char(char ch)
     if (ch == ',') {
         return send_key(0, HID_KEY_COMMA);
     }
+    if (ch == '.') {
+        return send_key(0, HID_KEY_PERIOD);
+    }
     if (ch == '!') {
         return send_key(KEYBOARD_MODIFIER_LEFTSHIFT, HID_KEY_1);
     }
@@ -117,8 +120,8 @@ static void open_notepad_and_type(void)
     if (!send_key(KEYBOARD_MODIFIER_LEFTGUI, HID_KEY_R)) {
         return;
     }
-    vTaskDelay(pdMS_TO_TICKS(350));
-    const char *command = "notepad";
+    vTaskDelay(pdMS_TO_TICKS(OCTOPUS_RUN_DIALOG_DELAY_MS));
+    const char *command = "notepad.exe";
     for (const char *ch = command; *ch; ++ch) {
         if (!send_char(*ch)) {
             return;

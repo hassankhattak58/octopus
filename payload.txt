@@ -1,1 +1,6 @@
-Welcome, Octupus Here!
+REM Author: Ahmad
+GUI r
+DELAY 800
+STRING notepad.exe
+ENTER
+STRING Hello Octupus
