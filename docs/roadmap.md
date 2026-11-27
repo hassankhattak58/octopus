@@ -1,8 +1,8 @@
 # Roadmap
 
-## Milestone 1 — BLE HID keyboard (current)
+## Milestone 1 — BLE and USB HID keyboard demos (working)
 
-Use ESP-IDF v5.5.3, NimBLE, and Espressif `esp_hid`. Prove advertising, pairing, connection, key press and release reports, disconnect/reconnect, and the GPIO trigger on one known ESP32-S3 board. Record the exact board model and pinout before changing firmware. Acceptance: one button press types exactly one `Octopus ready` line in a text editor on a paired test computer; reconnect and repeat.
+Use ESP-IDF v5.5.3, NimBLE, Espressif `esp_hid`, and `esp_tinyusb`. The BLE path advertises as `Octopus Kbd` and types `Octopus ready` when the button is pressed. The native USB path presents a keyboard to Windows and opens Notepad with `Welcome, Octupus Here!` on the same button press. Both paths have been built in CI, flashed to an ESP32-S3, and confirmed by the user on a Windows computer. Further reliability checks should cover disconnect/reconnect, power cycles, and repeated presses. Record the exact board model and pinout before changing hardware-specific settings.
 
 ## Milestone 2 — local action engine
 
@@ -22,4 +22,4 @@ Treat Wi-Fi functions as separate, opt-in modules after the HID milestone. A nea
 
 ## Why this stack
 
-ESP-IDF supplies the radio stack, `esp_hid`, board support, and build system. Its maintained [HID device example](https://github.com/espressif/esp-idf/tree/v5.5.3/examples/bluetooth/esp_hid_device) already supports ESP32-S3 and a BLE keyboard role. NimBLE keeps the firmware focused on BLE, which is the radio mode the ESP32-S3 offers. The later USB path can use Espressif's [USB HID support](https://docs.espressif.com/projects/esp-iot-solution/en/latest/usb/usb_overview/usb_device_solutions.html) without changing the action format.
+ESP-IDF supplies the radio stack, `esp_hid`, board support, and build system. Its maintained [HID device example](https://github.com/espressif/esp-idf/tree/v5.5.3/examples/bluetooth/esp_hid_device) supports ESP32-S3 and a BLE keyboard role. NimBLE keeps the wireless path focused on BLE, which is the radio mode the ESP32-S3 offers. The USB path uses Espressif's `esp_tinyusb` component and follows its [USB HID example](https://github.com/espressif/esp-idf/tree/v5.5.3/examples/peripherals/usb/device/tusb_hid). The next step is a shared action format for both transports.

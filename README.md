@@ -1,6 +1,6 @@
 # Octopus
 
-Open source ESP32-S3 multipurpose device project. The first milestone is a Bluetooth Low Energy (BLE) HID keyboard that sends a short test message after a physical button press. A mobile app and other modules will be designed after the BLE keyboard works reliably on real hardware.
+Open source ESP32-S3 multipurpose device project. The first milestone is a button-triggered HID keyboard over Bluetooth Low Energy (BLE) and native USB. A mobile app and other modules will follow after the HID paths are reliable on real hardware.
 
 ## Current state
 
