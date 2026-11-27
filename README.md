@@ -25,9 +25,9 @@ An ESP32-S3 development board, USB data cable, and a momentary push button are e
    ```
 
    Replace `COMx` with your board's serial port. On Linux or macOS, use the corresponding `/dev/...` port.
-3. Pair **Octopus Keyboard** from your test computer's Bluetooth settings. Put the cursor in a text editor. Press and release the wired button once. Expect `Octopus ready` and a newline. The serial monitor also logs the send event.
+3. Pair **Octopus Kbd** from your test computer's Bluetooth settings. Put the cursor in a text editor. Press and release the wired button once. Expect `Octopus ready` and a newline. The serial monitor also logs the send event.
 
-The keyboard mapping currently assumes a US English host layout. If you change the HID report map or device name, remove the old Bluetooth pairing and pair again so the host refreshes its cached descriptor. This first firmware has not been built or tested on physical hardware in this workspace; the toolchain and board are not present here.
+The keyboard mapping currently assumes a US English host layout. If you change the HID report map or device name, remove the old Bluetooth pairing and pair again so the host refreshes its cached descriptor. This board has no display or keypad, so this prototype uses BLE Just Works bonding; it does not provide MITM protection. A phone control service will need a stronger authorization design before it can trigger actions.
 
 ## Plan
 

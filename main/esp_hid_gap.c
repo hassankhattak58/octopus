@@ -769,7 +769,7 @@ esp_err_t esp_hid_ble_gap_adv_init(uint16_t appearance, const char *device_name)
     fields.flags = BLE_HS_ADV_F_DISC_GEN |
                    BLE_HS_ADV_F_BREDR_UNSUP;
 
-    fields.appearance = ESP_HID_APPEARANCE_GENERIC;
+    fields.appearance = appearance;
     fields.appearance_is_present = 1;
 
     /* Indicate that the TX power level field should be included; have the
@@ -793,9 +793,9 @@ esp_err_t esp_hid_ble_gap_adv_init(uint16_t appearance, const char *device_name)
     fields.uuids16_is_complete = 1;
 
     /* Initialize the security configuration */
-    ble_hs_cfg.sm_io_cap = BLE_SM_IO_CAP_DISP_ONLY;
+    ble_hs_cfg.sm_io_cap = BLE_SM_IO_CAP_NO_IO;
     ble_hs_cfg.sm_bonding = 1;
-    ble_hs_cfg.sm_mitm = 1;
+    ble_hs_cfg.sm_mitm = 0;
     ble_hs_cfg.sm_sc = 1;
     ble_hs_cfg.sm_our_key_dist = BLE_SM_PAIR_KEY_DIST_ID | BLE_SM_PAIR_KEY_DIST_ENC;
     ble_hs_cfg.sm_their_key_dist |= BLE_SM_PAIR_KEY_DIST_ID | BLE_SM_PAIR_KEY_DIST_ENC;
@@ -886,39 +886,6 @@ nimble_hid_gap_event(struct ble_gap_event *event, void *arg)
          */
         return BLE_GAP_REPEAT_PAIRING_RETRY;
 
-    case BLE_GAP_EVENT_PASSKEY_ACTION:
-        ESP_LOGI(TAG, "PASSKEY_ACTION_EVENT started");
-        struct ble_sm_io pkey = {0};
-        int key = 0;
-
-        if (event->passkey.params.action == BLE_SM_IOACT_DISP) {
-            pkey.action = event->passkey.params.action;
-            pkey.passkey = 123456; // This is the passkey to be entered on peer
-            ESP_LOGI(TAG, "Enter passkey %" PRIu32 "on the peer side", pkey.passkey);
-            rc = ble_sm_inject_io(event->passkey.conn_handle, &pkey);
-            ESP_LOGI(TAG, "ble_sm_inject_io result: %d", rc);
-        } else if (event->passkey.params.action == BLE_SM_IOACT_NUMCMP) {
-            ESP_LOGI(TAG, "Accepting passkey..");
-            pkey.action = event->passkey.params.action;
-            pkey.numcmp_accept = key;
-            rc = ble_sm_inject_io(event->passkey.conn_handle, &pkey);
-            ESP_LOGI(TAG, "ble_sm_inject_io result: %d", rc);
-        } else if (event->passkey.params.action == BLE_SM_IOACT_OOB) {
-            static uint8_t tem_oob[16] = {0};
-            pkey.action = event->passkey.params.action;
-            for (int i = 0; i < 16; i++) {
-                pkey.oob[i] = tem_oob[i];
-            }
-            rc = ble_sm_inject_io(event->passkey.conn_handle, &pkey);
-            ESP_LOGI(TAG, "ble_sm_inject_io result: %d", rc);
-        } else if (event->passkey.params.action == BLE_SM_IOACT_INPUT) {
-            ESP_LOGI(TAG, "Input not supported passing -> 123456");
-            pkey.action = event->passkey.params.action;
-            pkey.passkey = 123456;
-            rc = ble_sm_inject_io(event->passkey.conn_handle, &pkey);
-            ESP_LOGI(TAG, "ble_sm_inject_io result: %d", rc);
-        }
-        return 0;
     }
     return 0;
 }

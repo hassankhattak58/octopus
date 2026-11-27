@@ -400,7 +400,7 @@ static esp_hid_device_config_t ble_hid_config = {
     .product_id         = 0x05DF,
     .version            = 0x0100,
 #if CONFIG_EXAMPLE_HID_DEVICE_ROLE == 2
-    .device_name        = "Octopus Keyboard",
+    .device_name        = "Octopus Kbd",
 #elif CONFIG_EXAMPLE_HID_DEVICE_ROLE == 3
     .device_name        = "ESP Mouse",
 #else
