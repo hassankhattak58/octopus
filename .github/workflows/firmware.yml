@@ -1,0 +1,28 @@
+name: Firmware
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build ESP32-S3 firmware
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: v5.5.3
+          target: esp32s3
+          command: idf.py build && idf.py merge-bin -o build/octopus-merged.bin -f raw
+      - name: Save flashable firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: octopus-esp32s3-firmware
+          path: build/octopus-merged.bin
+          if-no-files-found: error
