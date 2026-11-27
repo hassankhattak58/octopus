@@ -21,6 +21,14 @@ foreach ($program in @('git', 'gh', 'python')) {
     }
 }
 
+function Assert-SerialPort {
+    if ([System.IO.Ports.SerialPort]::GetPortNames() -notcontains $Port) {
+        throw "$Port is not connected. Plug in the board's socket labeled COM and check the assigned COM number."
+    }
+}
+
+Assert-SerialPort
+
 $branch = (& git branch --show-current).Trim()
 if ($branch -ne 'main') {
     throw 'Run this script from the main branch.'
@@ -103,6 +111,7 @@ if (-not (Test-Path -LiteralPath $imagePath)) {
 }
 
 Invoke-Checked 'python' @('-m', 'esptool', '--chip', 'esp32s3', 'image-info', $imagePath)
+Assert-SerialPort
 Invoke-Checked 'python' @('-m', 'esptool', '--chip', 'esp32s3', '--port', $Port, 'chip-id')
 Invoke-Checked 'python' @('-m', 'esptool', '--chip', 'esp32s3', '--port', $Port, 'write-flash', '0x0', $imagePath)
 Write-Host 'Firmware installed. Connect native USB and press the button to test the Notepad text.'
