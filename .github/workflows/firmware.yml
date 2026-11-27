@@ -19,7 +19,7 @@ jobs:
         with:
           esp_idf_version: v5.5.3
           target: esp32s3
-          command: idf.py build && idf.py merge-bin -o build/octopus-merged.bin -f raw
+          command: idf.py build && idf.py merge-bin -o octopus-merged.bin -f raw
       - name: Save flashable firmware
         uses: actions/upload-artifact@v4
         with:
