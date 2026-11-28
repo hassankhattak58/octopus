@@ -41,9 +41,12 @@ DELAY 800
 STRING notepad.exe
 ENTER
 STRING Hello Octupus
+ENTER
+DELAY 500
+STRING This is a lab demo!
 ```
 
-`REM` lines are comments. The five action lines must stay in this order: open the Windows Run dialog, wait 100–2000 ms, open `notepad.exe`, press Enter, and type one final line of text. The final `STRING` accepts up to 80 characters using letters, spaces, commas, and exclamation marks. The automater validates this exact Notepad sequence; it does not execute arbitrary commands. The file is committed to this **public** repository, so do not put secrets in it.
+`REM` lines are comments. The first four actions stay in this order: open the Windows Run dialog, wait 100–2000 ms, type `notepad.exe`, and press Enter. After that, use up to 16 `STRING`, `ENTER`, and `DELAY` actions inside Notepad. Each `STRING` accepts up to 80 characters using letters, spaces, commas, periods, and exclamation marks; total text is limited to 320 characters. Added delays are limited to 10 seconds total. This is a DuckyScript-style subset for the Notepad demo, with the application launch fixed. The file is committed to this **public** repository, so do not put secrets in it.
 
 With the **COM** socket connected and `git`, `gh`, Python, and `esptool` installed, run from the repository root:
 
@@ -51,7 +54,7 @@ With the **COM** socket connected and `git`, `gh`, Python, and `esptool` install
 .\deploy-demo.ps1 -Port COM3
 ```
 
-The script validates the lines, generates the firmware header, commits and pushes the two demo files if they changed, waits for a successful GitHub Actions build, downloads the merged image, checks the chip on the selected port, and flashes it. It stops on any failure and refuses unrelated worktree changes. Use `-ValidateOnly` to check the file without building or flashing. Connect the board's **USB** socket afterward and press the button to test. Use a different `-Port` value if Windows assigned another COM number.
+The script validates the lines, generates the firmware header, commits and pushes the two demo files if they changed, waits for a successful GitHub Actions build, downloads the merged image, checks the chip on the selected port, and flashes it. It stops on any failure and refuses unrelated worktree changes. Use `-ValidateOnly` to check the file or `-GenerateOnly` to write the C header without building or flashing. Connect the board's **USB** socket afterward and press the button to test. Use a different `-Port` value if Windows assigned another COM number.
 
 The keyboard mapping currently assumes a US English host layout. The Notepad sequence uses the Windows `Win+R` shortcut and is Windows-specific. If you change the HID report map or device name, remove the old Bluetooth pairing and pair again so the host refreshes its cached descriptor. This board has no display or keypad, so this prototype uses BLE Just Works bonding; it does not provide MITM protection. A phone control service will need a stronger authorization design before it can trigger actions.
 

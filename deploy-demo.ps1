@@ -1,7 +1,8 @@
 param(
     [ValidatePattern('^COM[0-9]+$')]
     [string]$Port = 'COM3',
-    [switch]$ValidateOnly
+    [switch]$ValidateOnly,
+    [switch]$GenerateOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -43,8 +44,8 @@ if (-not (Test-Path -LiteralPath $payloadPath)) {
 }
 $instructions = @([System.IO.File]::ReadAllLines($payloadPath, [System.Text.Encoding]::UTF8) |
     Where-Object { $_.Trim() -and $_ -notmatch '^\s*REM(?:\s|$)' })
-if ($instructions.Count -ne 5) {
-    throw 'payload.txt needs GUI r, DELAY, STRING notepad.exe, ENTER, and one final STRING line, in that order. REM comments are allowed.'
+if ($instructions.Count -lt 5 -or $instructions.Count -gt 20) {
+    throw 'payload.txt needs the four Notepad launch lines followed by 1-16 text actions. REM comments are allowed.'
 }
 if ($instructions[0] -notmatch '^\s*GUI\s+R\s*$') {
     throw 'The first action must be GUI r.'
@@ -62,15 +63,55 @@ if ($instructions[2] -notmatch '^\s*STRING\s+notepad\.exe\s*$') {
 if ($instructions[3] -notmatch '^\s*ENTER\s*$') {
     throw 'The fourth action must be ENTER.'
 }
-if ($instructions[4] -notmatch '^\s*STRING\s+(.+)$') {
-    throw 'The final action must be STRING followed by Notepad text.'
+$actions = New-Object System.Collections.ArrayList
+$totalTextLength = 0
+$totalDelayMs = 0
+$stringCount = 0
+foreach ($line in $instructions[4..($instructions.Count - 1)]) {
+    if ($line -match '^\s*STRING\s+(.+)$') {
+        $message = $Matches[1]
+        if ($message.Length -gt 80 -or $message -cnotmatch '^[A-Za-z ,!.]+$') {
+            throw 'Each STRING must contain 1-80 characters: letters, spaces, comma, period, or exclamation mark.'
+        }
+        $totalTextLength += $message.Length
+        $stringCount++
+        [void]$actions.Add([pscustomobject]@{ Type = 'STRING'; Text = $message; Delay = 0 })
+    } elseif ($line -match '^\s*ENTER\s*$') {
+        [void]$actions.Add([pscustomobject]@{ Type = 'ENTER'; Text = ''; Delay = 0 })
+    } elseif ($line -match '^\s*DELAY\s+([0-9]{1,4})\s*$') {
+        $actionDelay = [int]$Matches[1]
+        if ($actionDelay -lt 100 -or $actionDelay -gt 2000) {
+            throw 'Each DELAY must be between 100 and 2000 milliseconds.'
+        }
+        $totalDelayMs += $actionDelay
+        [void]$actions.Add([pscustomobject]@{ Type = 'DELAY'; Text = ''; Delay = $actionDelay })
+    } else {
+        throw "Unsupported Notepad action: $line"
+    }
 }
-$message = $Matches[1]
-if ($message.Length -lt 1 -or $message.Length -gt 80 -or $message -cnotmatch '^[A-Za-z ,!]+$') {
-    throw 'The final STRING must contain 1-80 characters: letters, spaces, comma, or exclamation mark.'
+if ($stringCount -lt 1 -or $totalTextLength -gt 320 -or $totalDelayMs -gt 10000) {
+    throw 'The demo needs at least one STRING and is limited to 320 text characters and 10 seconds of added delay.'
 }
-Write-Host "Validated Notepad demo: delay ${delayMs}ms, text '$message'"
+Write-Host "Validated Notepad demo: $($actions.Count) actions, $totalTextLength text characters"
 if ($ValidateOnly) {
+    return
+}
+
+$headerPath = Join-Path $repoRoot 'main/demo_message.h'
+$headerLines = @('#pragma once', '', "#define OCTOPUS_RUN_DIALOG_DELAY_MS $delayMs", '', 'static const octopus_demo_action_t octopus_demo_actions[] = {')
+foreach ($action in $actions) {
+    switch ($action.Type) {
+        'STRING' { $headerLines += "    { OCTOPUS_ACTION_STRING, 0, `"$($action.Text)`" }," }
+        'ENTER'  { $headerLines += '    { OCTOPUS_ACTION_ENTER, 0, NULL },' }
+        'DELAY'  { $headerLines += "    { OCTOPUS_ACTION_DELAY, $($action.Delay), NULL }," }
+    }
+}
+$headerLines += '};'
+$headerLines += '#define OCTOPUS_DEMO_ACTION_COUNT (sizeof(octopus_demo_actions) / sizeof(octopus_demo_actions[0]))'
+$header = ($headerLines -join "`n") + "`n"
+[System.IO.File]::WriteAllText($headerPath, $header, (New-Object System.Text.UTF8Encoding($false)))
+if ($GenerateOnly) {
+    Write-Host 'Generated main/demo_message.h without building or flashing.'
     return
 }
 
@@ -88,10 +129,6 @@ $unrelated = @($changed | Where-Object { $_ -and $_ -notin @('payload.txt', 'mai
 if ($unrelated.Count -gt 0) {
     throw "Unrelated worktree changes found: $($unrelated -join ', ')"
 }
-
-$headerPath = Join-Path $repoRoot 'main/demo_message.h'
-$header = "#pragma once`n`n#define OCTOPUS_RUN_DIALOG_DELAY_MS $delayMs`n#define OCTOPUS_DEMO_MESSAGE `"$message`"`n"
-[System.IO.File]::WriteAllText($headerPath, $header, (New-Object System.Text.UTF8Encoding($false)))
 
 Invoke-Checked 'git' @('add', '--', 'payload.txt', 'main/demo_message.h')
 & git diff --cached --quiet

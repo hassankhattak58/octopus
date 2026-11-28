@@ -3,6 +3,7 @@
  */
 
 #include <ctype.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -15,6 +16,19 @@
 #include "class/hid/hid_device.h"
 
 #include "usb_hid.h"
+
+typedef enum {
+    OCTOPUS_ACTION_STRING,
+    OCTOPUS_ACTION_ENTER,
+    OCTOPUS_ACTION_DELAY,
+} octopus_demo_action_kind_t;
+
+typedef struct {
+    octopus_demo_action_kind_t kind;
+    uint16_t delay_ms;
+    const char *text;
+} octopus_demo_action_t;
+
 #include "demo_message.h"
 
 static const char *TAG = "OCTOPUS_USB";
@@ -131,10 +145,24 @@ static void open_notepad_and_type(void)
         return;
     }
     vTaskDelay(pdMS_TO_TICKS(1500));
-    const char *message = OCTOPUS_DEMO_MESSAGE;
-    for (const char *ch = message; *ch; ++ch) {
-        if (!send_char(*ch)) {
-            return;
+    for (size_t index = 0; index < OCTOPUS_DEMO_ACTION_COUNT; ++index) {
+        const octopus_demo_action_t *action = &octopus_demo_actions[index];
+        switch (action->kind) {
+        case OCTOPUS_ACTION_STRING:
+            for (const char *ch = action->text; *ch; ++ch) {
+                if (!send_char(*ch)) {
+                    return;
+                }
+            }
+            break;
+        case OCTOPUS_ACTION_ENTER:
+            if (!send_key(0, HID_KEY_ENTER)) {
+                return;
+            }
+            break;
+        case OCTOPUS_ACTION_DELAY:
+            vTaskDelay(pdMS_TO_TICKS(action->delay_ms));
+            break;
         }
     }
 }
