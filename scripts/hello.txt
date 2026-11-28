@@ -1,0 +1,2 @@
+REM BLE and USB text entry demonstration
+STRINGLN Octopus ready

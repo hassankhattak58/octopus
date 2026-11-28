@@ -14,6 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Test portable DuckyScript parser
+        run: cc -std=c11 -Wall -Wextra -Werror -I main tests/parser_test.c main/ducky_script.c -o /tmp/octopus-parser-test && /tmp/octopus-parser-test
       - name: Build ESP32-S3 firmware
         uses: espressif/esp-idf-ci-action@v1
         with:

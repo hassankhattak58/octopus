@@ -1,0 +1,7 @@
+REM Windows Notepad demonstration on an authorized test computer
+GUI r
+DELAY 800
+STRING notepad.exe
+ENTER
+DELAY 1500
+STRINGLN Welcome, Octupus Here!

@@ -17,8 +17,9 @@
 #include "esp_event.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
-#include "driver/gpio.h"
 #include "usb_hid.h"
+#include "ble_hid.h"
+#include "button_controller.h"
 #include "esp_bt.h"
 
 #if CONFIG_BT_NIMBLE_ENABLED
@@ -54,6 +55,7 @@ typedef struct
 
 #if CONFIG_BT_BLE_ENABLED || CONFIG_BT_NIMBLE_ENABLED
 static local_param_t s_ble_hid_param = {0};
+static volatile bool s_ble_connected = false;
 
 const unsigned char mediaReportMap[] = {
     0x05, 0x0C,        // Usage Page (Consumer)
@@ -207,28 +209,6 @@ void ble_hid_demo_task_mouse(void *pvParameters)
 #endif
 
 #if CONFIG_EXAMPLE_HID_DEVICE_ROLE && CONFIG_EXAMPLE_HID_DEVICE_ROLE == 2
-#define CASE(a, b, c)  \
-                case a: \
-				buffer[0] = b;  \
-				buffer[2] = c; \
-                break;\
-
-// USB keyboard codes
-#define USB_HID_MODIFIER_LEFT_CTRL      0x01
-#define USB_HID_MODIFIER_LEFT_SHIFT     0x02
-#define USB_HID_MODIFIER_LEFT_ALT       0x04
-#define USB_HID_MODIFIER_RIGHT_CTRL     0x10
-#define USB_HID_MODIFIER_RIGHT_SHIFT    0x20
-#define USB_HID_MODIFIER_RIGHT_ALT      0x40
-
-#define USB_HID_SPACE                   0x2C
-#define USB_HID_DOT                     0x37
-#define USB_HID_NEWLINE                 0x28
-#define USB_HID_FSLASH                  0x38
-#define USB_HID_BSLASH                  0x31
-#define USB_HID_COMMA                   0x36
-#define USB_HID_DOT                     0x37
-
 const unsigned char keyboardReportMap[] = { //7 bytes input (modifiers, resrvd, keys*5), 1 byte output
     0x05, 0x01,        // Usage Page (Generic Desktop Ctrls)
     0x09, 0x06,        // Usage (Keyboard)
@@ -267,113 +247,26 @@ const unsigned char keyboardReportMap[] = { //7 bytes input (modifiers, resrvd, 
     // 65 bytes
 };
 
-static void char_to_code(uint8_t *buffer, char ch)
+static bool ble_ready(void)
 {
-	// Check if lower or upper case
-	if(ch >= 'a' && ch <= 'z')
-	{
-		buffer[0] = 0;
-		// convert ch to HID letter, starting at a = 4
-		buffer[2] = (uint8_t)(4 + (ch - 'a'));
-	}
-	else if(ch >= 'A' && ch <= 'Z')
-	{
-		// Add left shift
-		buffer[0] = USB_HID_MODIFIER_LEFT_SHIFT;
-		// convert ch to lower case
-		ch = ch - ('A'-'a');
-		// convert ch to HID letter, starting at a = 4
-		buffer[2] = (uint8_t)(4 + (ch - 'a'));
-	}
-	else if(ch >= '0' && ch <= '9') // Check if number
-	{
-		buffer[0] = 0;
-		// convert ch to HID number, starting at 1 = 30, 0 = 39
-		if(ch == '0')
-		{
-			buffer[2] = 39;
-		}
-		else
-		{
-			buffer[2] = (uint8_t)(30 + (ch - '1'));
-		}
-	}
-	else // not a letter nor a number
-	{
-		switch(ch)
-		{
-            CASE(' ', 0, USB_HID_SPACE);
-			CASE('.', 0,USB_HID_DOT);
-            CASE('\n', 0, USB_HID_NEWLINE);
-			CASE('?', USB_HID_MODIFIER_LEFT_SHIFT, USB_HID_FSLASH);
-			CASE('/', 0 ,USB_HID_FSLASH);
-			CASE('\\', 0, USB_HID_BSLASH);
-			CASE('|', USB_HID_MODIFIER_LEFT_SHIFT, USB_HID_BSLASH);
-			CASE(',', 0, USB_HID_COMMA);
-			CASE('<', USB_HID_MODIFIER_LEFT_SHIFT, USB_HID_COMMA);
-			CASE('>', USB_HID_MODIFIER_LEFT_SHIFT, USB_HID_COMMA);
-			CASE('@', USB_HID_MODIFIER_LEFT_SHIFT, 31);
-			CASE('!', USB_HID_MODIFIER_LEFT_SHIFT, 30);
-			CASE('#', USB_HID_MODIFIER_LEFT_SHIFT, 32);
-			CASE('$', USB_HID_MODIFIER_LEFT_SHIFT, 33);
-			CASE('%', USB_HID_MODIFIER_LEFT_SHIFT, 34);
-			CASE('^', USB_HID_MODIFIER_LEFT_SHIFT,35);
-			CASE('&', USB_HID_MODIFIER_LEFT_SHIFT, 36);
-			CASE('*', USB_HID_MODIFIER_LEFT_SHIFT, 37);
-			CASE('(', USB_HID_MODIFIER_LEFT_SHIFT, 38);
-			CASE(')', USB_HID_MODIFIER_LEFT_SHIFT, 39);
-			CASE('-', 0, 0x2D);
-			CASE('_', USB_HID_MODIFIER_LEFT_SHIFT, 0x2D);
-			CASE('=', 0, 0x2E);
-			CASE('+', USB_HID_MODIFIER_LEFT_SHIFT, 39);
-			CASE(8, 0, 0x2A); // backspace
-			CASE('\t', 0, 0x2B);
-			default:
-				buffer[0] = 0;
-				buffer[2] = 0;
-		}
-	}
+    return s_ble_connected && s_ble_hid_param.hid_dev;
 }
 
-void send_keyboard(char c)
+static bool ble_report(uint8_t modifier, uint8_t key)
 {
-    static uint8_t buffer[8] = {0};
-    char_to_code(buffer, c);
-    esp_hidd_dev_input_set(s_ble_hid_param.hid_dev, 0, 1, buffer, 8);
-    /* send the keyrelease event with sufficient delay */
-    vTaskDelay(50 / portTICK_PERIOD_MS);
-    memset(buffer, 0, sizeof(uint8_t) * 8);
-    esp_hidd_dev_input_set(s_ble_hid_param.hid_dev, 0, 1, buffer, 8);
+    uint8_t buffer[8] = {modifier, 0, key};
+    return ble_ready() && esp_hidd_dev_input_set(s_ble_hid_param.hid_dev, 0, 1, buffer, sizeof(buffer)) == ESP_OK;
 }
 
-void ble_hid_demo_task_kbd(void *pvParameters)
+static void ble_release_all(void)
 {
-    const gpio_num_t trigger = (gpio_num_t)CONFIG_OCTOPUS_TRIGGER_GPIO;
-    gpio_config_t input = {
-        .pin_bit_mask = 1ULL << trigger,
-        .mode = GPIO_MODE_INPUT,
-        .pull_up_en = GPIO_PULLUP_ENABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type = GPIO_INTR_DISABLE,
-    };
-    ESP_ERROR_CHECK(gpio_config(&input));
-    bool was_pressed = false;
-    while (1) {
-        const bool pressed = gpio_get_level(trigger) == 0;
-        if (pressed && !was_pressed && !octopus_usb_hid_ready()) {
-            vTaskDelay(pdMS_TO_TICKS(30));
-            if (gpio_get_level(trigger) == 0) {
-                const char *message = "Octopus ready\n";
-                ESP_LOGI(TAG, "Sending keyboard test message");
-                for (const char *ch = message; *ch != '\0'; ++ch) {
-                    send_keyboard(*ch);
-                    vTaskDelay(pdMS_TO_TICKS(20));
-                }
-            }
-        }
-        was_pressed = pressed;
-        vTaskDelay(pdMS_TO_TICKS(20));
-    }
+    if (ble_ready()) ble_report(0, 0);
+}
+
+const octopus_keyboard_transport_t *octopus_ble_transport(void)
+{
+    static const octopus_keyboard_transport_t transport = {"BLE", ble_ready, ble_report, ble_release_all};
+    return &transport;
 }
 #endif
 static esp_hid_raw_report_map_t ble_report_maps[] = {
@@ -600,9 +493,7 @@ void ble_hid_task_start_up(void)
                 &s_ble_hid_param.task_hdl);
 
 #elif CONFIG_EXAMPLE_HID_DEVICE_ROLE == 2
-    /* Nimble Specific */
-    xTaskCreate(ble_hid_demo_task_kbd, "ble_hid_demo_task_kbd", 3 * 1024, NULL, configMAX_PRIORITIES - 3,
-                &s_ble_hid_param.task_hdl);
+    /* Keyboard reports are driven by the shared script engine. */
 #elif CONFIG_EXAMPLE_HID_DEVICE_ROLE == 3
     /* Nimble Specific */
     xTaskCreate(ble_hid_demo_task_mouse, "ble_hid_demo_task_mouse", 3 * 1024, NULL, configMAX_PRIORITIES - 3,
@@ -632,6 +523,7 @@ static void ble_hidd_event_callback(void *handler_args, esp_event_base_t base, i
     }
     case ESP_HIDD_CONNECT_EVENT: {
         ESP_LOGI(TAG, "CONNECT");
+        s_ble_connected = true;
         ble_hid_task_start_up();
         break;
     }
@@ -663,6 +555,7 @@ static void ble_hidd_event_callback(void *handler_args, esp_event_base_t base, i
     }
     case ESP_HIDD_DISCONNECT_EVENT: {
         ESP_LOGI(TAG, "DISCONNECT: %s", esp_hid_disconnect_reason_str(esp_hidd_dev_transport_get(param->disconnect.dev), param->disconnect.reason));
+        s_ble_connected = false;
         ble_hid_task_shut_down();
         esp_hid_ble_gap_adv_start();
         break;
@@ -924,6 +817,7 @@ void app_main(void)
 {
     esp_err_t ret;
     octopus_usb_hid_init();
+    octopus_button_controller_init();
 #if HID_DEV_MODE == HIDD_IDLE_MODE
     ESP_LOGE(TAG, "Please turn on BT HID device or BLE!");
     return;

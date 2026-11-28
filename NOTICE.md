@@ -11,3 +11,5 @@ The USB HID implementation in `main/usb_hid.c` follows the APIs and descriptor p
 https://github.com/espressif/esp-idf/tree/v5.5.3/examples/peripherals/usb/device/tusb_hid
 
 The USB stack is provided by `espressif/esp_tinyusb` through the ESP-IDF Component Manager.
+
+`joltwallet/littlefs` is downloaded by the ESP-IDF Component Manager. Its ESP-IDF port and upstream LittleFS are licensed under BSD-3-Clause/MIT terms; consult the resolved component license files for exact notices. No new third-party source is vendored here.

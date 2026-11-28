@@ -2,34 +2,16 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include <ctype.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
 
-#include "driver/gpio.h"
 #include "esp_log.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "tinyusb.h"
 #include "tinyusb_default_config.h"
 #include "class/hid/hid_device.h"
 
 #include "usb_hid.h"
-
-typedef enum {
-    OCTOPUS_ACTION_STRING,
-    OCTOPUS_ACTION_ENTER,
-    OCTOPUS_ACTION_DELAY,
-} octopus_demo_action_kind_t;
-
-typedef struct {
-    octopus_demo_action_kind_t kind;
-    uint16_t delay_ms;
-    const char *text;
-} octopus_demo_action_t;
-
-#include "demo_message.h"
 
 static const char *TAG = "OCTOPUS_USB";
 static const uint8_t report_descriptor[] = {
@@ -85,112 +67,21 @@ bool octopus_usb_hid_ready(void)
     return tud_mounted() && tud_hid_ready();
 }
 
-static bool send_key(uint8_t modifier, uint8_t key)
+static bool usb_report(uint8_t modifier, uint8_t key)
 {
     uint8_t keys[6] = {key};
-    for (int attempt = 0; attempt < 50 && !octopus_usb_hid_ready(); ++attempt) {
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
-    if (!octopus_usb_hid_ready()) {
-        return false;
-    }
-    if (!tud_hid_keyboard_report(0, modifier, keys)) {
-        return false;
-    }
-    vTaskDelay(pdMS_TO_TICKS(35));
-    if (!tud_hid_keyboard_report(0, 0, NULL)) {
-        return false;
-    }
-    vTaskDelay(pdMS_TO_TICKS(35));
-    return true;
+    return octopus_usb_hid_ready() && tud_hid_keyboard_report(0, modifier, key ? keys : NULL);
 }
 
-static bool send_char(char ch)
+static void usb_release_all(void)
 {
-    if (ch >= 'a' && ch <= 'z') {
-        return send_key(0, HID_KEY_A + (ch - 'a'));
-    }
-    if (ch >= 'A' && ch <= 'Z') {
-        return send_key(KEYBOARD_MODIFIER_LEFTSHIFT, HID_KEY_A + (ch - 'A'));
-    }
-    if (ch == ' ') {
-        return send_key(0, HID_KEY_SPACE);
-    }
-    if (ch == ',') {
-        return send_key(0, HID_KEY_COMMA);
-    }
-    if (ch == '.') {
-        return send_key(0, HID_KEY_PERIOD);
-    }
-    if (ch == '!') {
-        return send_key(KEYBOARD_MODIFIER_LEFTSHIFT, HID_KEY_1);
-    }
-    return false;
+    if (octopus_usb_hid_ready()) tud_hid_keyboard_report(0, 0, NULL);
 }
 
-static void open_notepad_and_type(void)
+const octopus_keyboard_transport_t *octopus_usb_transport(void)
 {
-    ESP_LOGI(TAG, "Opening Notepad and typing welcome text");
-    if (!send_key(KEYBOARD_MODIFIER_LEFTGUI, HID_KEY_R)) {
-        return;
-    }
-    vTaskDelay(pdMS_TO_TICKS(OCTOPUS_RUN_DIALOG_DELAY_MS));
-    const char *command = "notepad.exe";
-    for (const char *ch = command; *ch; ++ch) {
-        if (!send_char(*ch)) {
-            return;
-        }
-    }
-    if (!send_key(0, HID_KEY_ENTER)) {
-        return;
-    }
-    vTaskDelay(pdMS_TO_TICKS(1500));
-    for (size_t index = 0; index < OCTOPUS_DEMO_ACTION_COUNT; ++index) {
-        const octopus_demo_action_t *action = &octopus_demo_actions[index];
-        switch (action->kind) {
-        case OCTOPUS_ACTION_STRING:
-            for (const char *ch = action->text; *ch; ++ch) {
-                if (!send_char(*ch)) {
-                    return;
-                }
-            }
-            break;
-        case OCTOPUS_ACTION_ENTER:
-            if (!send_key(0, HID_KEY_ENTER)) {
-                return;
-            }
-            break;
-        case OCTOPUS_ACTION_DELAY:
-            vTaskDelay(pdMS_TO_TICKS(action->delay_ms));
-            break;
-        }
-    }
-}
-
-static void usb_button_task(void *argument)
-{
-    (void)argument;
-    const gpio_num_t pin = (gpio_num_t)CONFIG_OCTOPUS_TRIGGER_GPIO;
-    gpio_config_t input = {
-        .pin_bit_mask = 1ULL << pin,
-        .mode = GPIO_MODE_INPUT,
-        .pull_up_en = GPIO_PULLUP_ENABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type = GPIO_INTR_DISABLE,
-    };
-    ESP_ERROR_CHECK(gpio_config(&input));
-    bool was_pressed = gpio_get_level(pin) == 0;
-    while (true) {
-        bool pressed = gpio_get_level(pin) == 0;
-        if (pressed && !was_pressed && octopus_usb_hid_ready()) {
-            vTaskDelay(pdMS_TO_TICKS(30));
-            if (gpio_get_level(pin) == 0 && octopus_usb_hid_ready()) {
-                open_notepad_and_type();
-            }
-        }
-        was_pressed = pressed;
-        vTaskDelay(pdMS_TO_TICKS(20));
-    }
+    static const octopus_keyboard_transport_t transport = {"USB", octopus_usb_hid_ready, usb_report, usb_release_all};
+    return &transport;
 }
 
 void octopus_usb_hid_init(void)
@@ -200,7 +91,5 @@ void octopus_usb_hid_init(void)
     config.descriptor.string = string_descriptor;
     config.descriptor.string_count = sizeof(string_descriptor) / sizeof(string_descriptor[0]);
     ESP_ERROR_CHECK(tinyusb_driver_install(&config));
-    BaseType_t created = xTaskCreate(usb_button_task, "usb_button", 3072, NULL, 5, NULL);
-    ESP_ERROR_CHECK(created == pdPASS ? ESP_OK : ESP_ERR_NO_MEM);
     ESP_LOGI(TAG, "USB HID keyboard ready for native USB host");
 }

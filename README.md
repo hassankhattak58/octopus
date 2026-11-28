@@ -1,69 +1,52 @@
 # Octopus
 
-Open source ESP32-S3 multipurpose device project. The first milestone is a button-triggered HID keyboard over Bluetooth Low Energy (BLE) and native USB. A mobile app and other modules will follow after the HID paths are reliable on real hardware.
+Octopus is an open-source ESP32-S3 laboratory keyboard device. It runs bounded DuckyScript-style text files over native USB HID or BLE HID after physical button confirmation. The firmware uses ESP-IDF v5.5.3. Connecting USB or pairing BLE never starts a script.
 
-## Current state
+## Hardware and use
 
-- ESP-IDF firmware based on [Espressif's HID device example](https://github.com/espressif/esp-idf/tree/v5.5.3/examples/bluetooth/esp_hid_device), pinned to ESP-IDF **v5.5.3**.
-- BLE keyboard profile using Espressif's `esp_hid` component and NimBLE. ESP32-S3 supports BLE, but not Bluetooth Classic.
-- One press of a button wired between **GPIO 4 and GND** uses the active HID transport. With native USB connected to a Windows PC, it opens an untitled Notepad window and types the final `STRING` from [payload.txt](payload.txt). Without native USB, it types `Octopus ready` and Enter over BLE to the paired computer. The pin is configurable in `idf.py menuconfig` under **HID Example Configuration**.
-- No mobile control, script interpreter, or Wi-Fi capture yet.
+Use an ESP32-S3 board with native USB and a button from **GPIO 4 to GND** (internal pull-up enabled). The pin can be changed in `idf.py menuconfig`. On the two-socket board, **COM** is for flashing and serial logs; **USB** is the HID keyboard connection. The BLE pairing name is **Octopus Kbd**. Test only on a computer you own or may use.
 
-## Hardware
-
-An ESP32-S3 development board with a native USB socket, USB data cable, and a momentary push button are enough for both transports. Connect one button terminal to GPIO 4 and the other to GND. Check your board's pinout first; if GPIO 4 is unavailable, choose another free input pin in menuconfig. The internal pull-up is enabled. On boards with two sockets, use **COM** for flashing and serial logs, and **USB** for the native USB keyboard. Use a computer you own or have permission to test.
-
-## Build and test
-
-1. Install [ESP-IDF v5.5.3 and its toolchain](https://docs.espressif.com/projects/esp-idf/en/v5.5.3/esp32s3/get-started/index.html). On Windows, use the ESP-IDF PowerShell or Command Prompt shortcut so `idf.py` is available.
-2. Clone this repository and run:
-
-   ```powershell
-   idf.py set-target esp32s3
-   idf.py build
-   idf.py -p COMx flash monitor
-   ```
-
-   Replace `COMx` with your board's serial port. On Linux or macOS, use the corresponding `/dev/...` port.
-3. Pair **Octopus Kbd** from your test computer's Bluetooth settings. Put the cursor in a text editor. Press and release the wired button once. Expect `Octopus ready` and a newline. The serial monitor also logs the send event.
-4. For the USB test on Windows, also connect the board's socket labeled **USB** to the computer with a data cable. Wait for Windows to recognize **Octopus USB Keyboard**. Press and release the button once. Expect a new untitled Notepad window containing the final `STRING` from `payload.txt`. USB takes priority while it is connected; unplug native USB to test BLE again.
-
-If ESP-IDF is not installed locally, the [Firmware workflow](.github/workflows/firmware.yml) builds the project and publishes an `octopus-esp32s3-firmware` artifact containing `octopus-merged.bin`. Download it from a successful workflow run, then flash it at offset zero with `python -m esptool --chip esp32s3 --port COMx write-flash 0x0 octopus-merged.bin`.
-
-### One-command Notepad demo update (Windows)
-
-Edit [payload.txt](payload.txt) using this line-based format:
-
-```text
-REM Author: Ahmad
-GUI r
-DELAY 800
-STRING notepad.exe
-ENTER
-STRING Hello Octupus
-ENTER
-DELAY 500
-STRING This is a lab demo!
-```
-
-`REM` lines are comments. The first four actions stay in this order: open the Windows Run dialog, wait 100–2000 ms, type `notepad.exe`, and press Enter. After that, use up to 16 `STRING`, `ENTER`, and `DELAY` actions inside Notepad. Each `STRING` accepts up to 80 characters using letters, spaces, commas, periods, and exclamation marks; total text is limited to 320 characters. Added delays are limited to 10 seconds total. This is a DuckyScript-style subset for the Notepad demo, with the application launch fixed. The file is committed to this **public** repository, so do not put secrets in it.
-
-With the **COM** socket connected and `git`, `gh`, Python, and `esptool` installed, run from the repository root:
+Install [ESP-IDF v5.5.3](https://docs.espressif.com/projects/esp-idf/en/v5.5.3/esp32s3/get-started/index.html), then in its terminal run:
 
 ```powershell
-.\deploy-demo.ps1 -Port COM3
+idf.py set-target esp32s3
+idf.py build
+idf.py -p COM3 flash monitor
 ```
 
-The script validates the lines, generates the firmware header, commits and pushes the two demo files if they changed, waits for a successful GitHub Actions build, downloads the merged image, checks the chip on the selected port, and flashes it. It stops on any failure and refuses unrelated worktree changes. Use `-ValidateOnly` to check the file or `-GenerateOnly` to write the C header without building or flashing. Connect the board's **USB** socket afterward and press the button to test. Use a different `-Port` value if Windows assigned another COM number.
+Replace `COM3` with your serial port. The build creates a LittleFS image from [scripts](scripts); `flash` installs both the app and scripts. The [Firmware workflow](.github/workflows/firmware.yml) runs parser tests and builds `octopus-merged.bin`. Flash that artifact at offset zero with `python -m esptool --chip esp32s3 --port COM3 write-flash 0x0 octopus-merged.bin`.
 
-The keyboard mapping currently assumes a US English host layout. The Notepad sequence uses the Windows `Win+R` shortcut and is Windows-specific. If you change the HID report map or device name, remove the old Bluetooth pairing and pair again so the host refreshes its cached descriptor. This board has no display or keypad, so this prototype uses BLE Just Works bonding; it does not provide MITM protection. A phone control service will need a stronger authorization design before it can trigger actions.
+Serial output lists `.txt` files and the selected script. **Short press** cycles selection. **Hold at least 800 ms and release** to validate and execute. **Press during execution** to cancel immediately; the engine releases keys when it stops. USB takes priority when ready; otherwise a paired BLE host is used. No host means no run. The initial default is `notepad.txt` for USB and `hello.txt` for BLE until you select a file. One script runs at a time. The Notepad example is Windows-specific and creates an untitled document containing “Welcome, Octupus Here!”.
 
-## Plan
+### Update scripts
 
-See [docs/roadmap.md](docs/roadmap.md) for the staged implementation and acceptance checks. The core design is a device service with separate HID transport, input/action engine, and later phone control. The phone app should select and confirm actions; the firmware should require an authenticated connection and local arming before sending any HID reports.
+Edit plain-text files in [scripts](scripts), then rebuild and flash. The Windows automation remains available: edit [payload.txt](payload.txt), then run `.\deploy-demo.ps1 -Port COM3`. It copies that file to `scripts/notepad.txt`, commits and pushes both files, waits for CI, downloads the merged image, checks the chip, and flashes it. `-ValidateOnly` checks size and NUL bytes; `-GenerateOnly` only copies the file. The firmware validates commands before execution. This public repository must not contain secrets.
 
-## Open source and attribution
+## Supported DuckyScript-style commands
 
-Original Octopus material is MIT licensed; see [LICENSE](LICENSE). The files in `main/` derived from Espressif's ESP-IDF HID example retain their `SPDX-License-Identifier: Unlicense OR CC0-1.0` headers. See [NOTICE.md](NOTICE.md) for provenance. No third-party source is vendored beyond the adapted Espressif example.
+| Syntax | Action |
+|---|---|
+| `REM text` | Comment |
+| `STRING text`, `STRINGLN text` | Type text; `STRINGLN` adds Enter |
+| `DELAY ms` | Pause 0–10000 ms |
+| `DEFAULT_DELAY ms`, `DEFAULTDELAY ms` | Pause after later text/key actions |
+| `ENTER`, `RETURN`, `TAB`, `SPACE`, `BACKSPACE`, `ESC`, `ESCAPE`, `DELETE` | Single key |
+| `UP`, `DOWN`, `LEFT`, `RIGHT` (optionally `ARROW` suffix) | Arrow key |
+| `HOME`, `END`, `F1`–`F9` | Single key |
+| `CTRL`, `CONTROL`, `SHIFT`, `ALT`, `GUI`, `WIN`, `WINDOWS` plus one key | Combination, e.g. `GUI r`, `CTRL ALT DELETE` |
 
-Contributions are welcome through issues and pull requests. Please include your board model, ESP-IDF version, logs, and reproduction steps in bug reports. Test HID behavior only on devices you own or are authorized to use.
+Commands are case-insensitive. Text uses a US keyboard layout and printable US ASCII; unsupported characters and commands fail validation with a line number. Limits: 8192 bytes per file, 256 bytes per line, 128 actions, 10000 ms per delay, and 60 seconds estimated runtime. The engine checks cancellation at least every 10 ms during delays and between key reports. This is a **subset**, not complete Hak5 DuckyScript 3. Variables, loops, conditionals, `ATTACKMODE`, non-US layouts, and host-side features are unsupported. The board has no display; selection and errors appear in serial logs.
+
+## Architecture and library choice
+
+`ducky_script` parses and validates without ESP-IDF dependencies. `script_storage` mounts LittleFS and lists/selects files. `script_engine` executes through `keyboard_transport`, implemented by the existing USB and BLE paths. `button_controller` owns the physical control; `device_status` reports state. A future mobile app can select a file through a separately authenticated control service while retaining local confirmation.
+
+| Option | ESP32-S3 transport / language | Memory and dependencies | License, maintenance, and fit |
+|---|---|---|---|
+| [Espressif esp_tinyusb](https://components.espressif.com/components/espressif/esp_tinyusb) + [esp_hid/NimBLE](https://github.com/espressif/esp-idf/tree/v5.5.3/examples/bluetooth/esp_hid_device) | Native USB + BLE; no script parser | Already present; NimBLE is the lighter BLE host | Espressif maintained; selected to preserve working paths |
+| [Arduino ESP32 USB HID](https://docs.espressif.com/projects/arduino-esp32/en/latest/api/usb.html) | Native USB; no parser | Adds Arduino core | Maintained, but requires framework migration |
+| [Adafruit TinyUSB Arduino](https://github.com/adafruit/Adafruit_TinyUSB_Arduino) | Native USB; no parser | Adds Arduino and Adafruit wrapper | Active, redundant with current TinyUSB |
+| [T-vK ESP32-BLE-Keyboard](https://github.com/T-vK/ESP32-BLE-Keyboard) | BLE only; no parser | Arduino BLE/NimBLE | Open source, but would replace working IDF BLE path |
+| [s3-ducky](https://github.com/kanishka-sahoo/s3-ducky) | USB firmware; DuckyScript 1 and some 3 features per project | Whole firmware and writable drive | Open source, but not a small dual-transport component |
+
+The comparison is qualitative; no cross-library RAM or flash benchmark was run. [Hak5’s payload repository](https://github.com/hak5/usbrubberducky-payloads) is a payload collection, not a drop-in ESP32-S3 interpreter. [joltwallet/littlefs](https://components.espressif.com/components/joltwallet/littlefs) provides script storage. See [NOTICE.md](NOTICE.md) for licenses and attribution. Parser tests run in CI before the ESP-IDF build; hardware behavior after these changes requires verification on the board.
