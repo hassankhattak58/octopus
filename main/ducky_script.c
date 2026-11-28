@@ -145,7 +145,7 @@ bool octopus_script_parse(octopus_script_t *script, const char *source, size_t l
             action->type = OCTOPUS_ACT_KEY;
             char combo[OCTOPUS_MAX_LINE_BYTES + 1];
             int written = snprintf(combo, sizeof(combo), "%s%s%s", command, *arg ? " " : "", arg);
-            if (written < 0 || written >= sizeof(combo)) return fail(error, line, "Key combination too long");
+            if (written < 0 || (size_t)written >= sizeof(combo)) return fail(error, line, "Key combination too long");
             for (char *p = combo; *p; ++p) *p = (char)toupper((unsigned char)*p);
             if (!parse_key_combo(combo, action)) return fail(error, line, "Unknown command or invalid key combination");
             script->estimated_ms += 70;
