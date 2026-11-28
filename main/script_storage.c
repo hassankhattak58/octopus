@@ -2,6 +2,7 @@
 #include "script_storage.h"
 
 #include <dirent.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include "esp_log.h"
@@ -40,7 +41,7 @@ bool octopus_storage_init(octopus_script_catalog_t *catalog)
     struct dirent *entry;
     while ((entry = readdir(directory)) && catalog->count < OCTOPUS_MAX_SCRIPTS) {
         if (!script_name(entry->d_name)) continue;
-        snprintf(catalog->names[catalog->count], OCTOPUS_SCRIPT_NAME_BYTES, "%s", entry->d_name);
+        memcpy(catalog->names[catalog->count], entry->d_name, strlen(entry->d_name) + 1);
         ++catalog->count;
     }
     closedir(directory);
@@ -73,15 +74,23 @@ bool octopus_storage_load(const char *name, octopus_script_t *script, octopus_sc
         if (error) { error->line = 0; snprintf(error->message, sizeof(error->message), "Script missing"); }
         return false;
     }
-    char source[OCTOPUS_MAX_SCRIPT_BYTES + 1];
-    size_t length = fread(source, 1, sizeof(source), file);
+    char *source = malloc(OCTOPUS_MAX_SCRIPT_BYTES + 1);
+    if (!source) {
+        fclose(file);
+        if (error) { error->line = 0; snprintf(error->message, sizeof(error->message), "Out of memory"); }
+        return false;
+    }
+    size_t length = fread(source, 1, OCTOPUS_MAX_SCRIPT_BYTES + 1, file);
     bool read_error = ferror(file);
     fclose(file);
     if (read_error || length > OCTOPUS_MAX_SCRIPT_BYTES) {
         if (error) { error->line = 0; snprintf(error->message, sizeof(error->message), "Script read error or too large"); }
+        free(source);
         return false;
     }
-    return octopus_script_parse(script, source, length, error);
+    bool valid = octopus_script_parse(script, source, length, error);
+    free(source);
+    return valid;
 }
 
 void octopus_storage_select_next(octopus_script_catalog_t *catalog)
