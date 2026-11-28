@@ -139,16 +139,21 @@ if ($LASTEXITCODE -gt 1) {
 
 if ($hasChanges) {
     Invoke-Checked 'git' @('commit', '-m', 'Update Notepad demo text')
-    $requestedAt = (Get-Date).ToUniversalTime().AddSeconds(-2)
+    $sha = (& git rev-parse HEAD).Trim()
+    $knownRunIds = @()
     Invoke-Checked 'git' @('push', 'origin', 'main')
     $event = 'push'
 } else {
-    $requestedAt = (Get-Date).ToUniversalTime().AddSeconds(-2)
+    $sha = (& git rev-parse HEAD).Trim()
+    $previousJson = & gh run list --workflow Firmware --commit $sha --event workflow_dispatch --limit 100 --json databaseId
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Could not query existing GitHub Actions runs.'
+    }
+    $knownRunIds = @((ConvertFrom-Json -InputObject $previousJson) | ForEach-Object { [long]$_.databaseId })
     Invoke-Checked 'gh' @('workflow', 'run', 'firmware.yml', '--ref', 'main')
     $event = 'workflow_dispatch'
 }
 
-$sha = (& git rev-parse HEAD).Trim()
 $run = $null
 for ($attempt = 0; $attempt -lt 24; $attempt++) {
     $json = & gh run list --workflow Firmware --commit $sha --limit 10 --json databaseId,status,conclusion,event,createdAt
@@ -156,7 +161,7 @@ for ($attempt = 0; $attempt -lt 24; $attempt++) {
         throw 'Could not query GitHub Actions runs.'
     }
     $runs = ConvertFrom-Json -InputObject $json
-    $run = $runs | Where-Object { $_.event -eq $event -and [datetime]$_.createdAt -ge $requestedAt } | Sort-Object createdAt -Descending | Select-Object -First 1
+    $run = $runs | Where-Object { $_.event -eq $event -and [long]$_.databaseId -notin $knownRunIds } | Sort-Object createdAt -Descending | Select-Object -First 1
     if ($run) { break }
     Start-Sleep -Seconds 5
 }
@@ -167,7 +172,7 @@ if (-not $run) {
 Write-Host "Building commit $sha in GitHub Actions run $($run.databaseId)..."
 Invoke-Checked 'gh' @('run', 'watch', [string]$run.databaseId, '--exit-status', '--interval', '10')
 
-$downloadDir = Join-Path $repoRoot "build/automation/$($run.databaseId)"
+$downloadDir = Join-Path $repoRoot "build/automation/$($run.databaseId)-$([guid]::NewGuid().ToString('N'))"
 New-Item -ItemType Directory -Force -Path $downloadDir | Out-Null
 Invoke-Checked 'gh' @('run', 'download', [string]$run.databaseId, '--name', 'octopus-esp32s3-firmware', '--dir', $downloadDir)
 $imagePath = Join-Path $downloadDir 'octopus-merged.bin'
